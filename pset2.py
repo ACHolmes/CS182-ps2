@@ -382,17 +382,21 @@ class SudokuGameBoard:
         # list since there is no legal assignment for the second variable if 2 is assigned to the first.
         
         #### YOUR CODE HERE ####
-
-        for pos, constraints in self.coordinate_dict.items():
-            relevantcoords = self.get_related_coords(pos)
-            for constraint in constraints:
-                for otherpos, otherconstraints in self.coordinate_dict.items():
-                    if pos != otherpos and otherpos in relevantcoords:
-                        if [constraint] == otherconstraints:
-                            constraints.remove(constraint)
-                            break
-                        if [constraint] == constraints and constraint in otherconstraints:
-                            otherconstraints.remove(constraint)
+        change = True
+        while (change):
+            change = False
+            for pos, constraints in self.coordinate_dict.items():
+                relevantcoords = self.get_related_coords(pos)
+                for constraint in constraints:
+                    for otherpos, otherconstraints in self.coordinate_dict.items():
+                        if pos != otherpos and otherpos in relevantcoords:
+                            if [constraint] == otherconstraints:
+                                change = True
+                                constraints.remove(constraint)
+                                break
+                            if [constraint] == constraints and constraint in otherconstraints:
+                                change = True
+                                otherconstraints.remove(constraint)
         # Check that all unassigned variables have legal candidates, otherwise return False indicating that there is a conflict in the current board arrangement
         # If an assignment to the board leaves an unassigned variable with no legal options, then the most recent assignment cannot lead to a valid solution
         
@@ -600,6 +604,7 @@ import time
 def solve_board_IP(input_filename, print_result=True):
     """Helper function that reads in a Sudoku board from a .csv file and solves it using the integer programming functionalities of cvxpy"""
     ### Data Processing ###
+    print("IP SOLVER START!")
     starting_board = np.genfromtxt(input_filename, delimiter=',', encoding="utf-8",dtype=int) # Read in the game board from a .csv file        
     assert np.isnan(starting_board).sum() == 0, "NaN entries found in starting board after import" # Data validation
     assert starting_board.shape == (9,9), "Size of starting board is not (9, 9), got "+str(starting_board.shape)
@@ -631,10 +636,47 @@ def Sudoku_Solver_IP(starting_board: np.array):
     constraints=[] # A list to hold the constraints for this integer program
     
     #### YOUR CODE HERE ####
+
+
+    # Need every variable to be either 0 or 1
+    for i in range(9):
+      for j in range(9):
+        for k in range(9):
+          constraints.append(decision_variables[k][i, j] <= 1)
+          constraints.append(decision_variables[k][i, j] >= 0)
+
+    # Each number must appear 9 times
+    for i in range(9):
+      constraints.append(cp.sum(decision_variables[i]) <= 9)
+      constraints.append(cp.sum(decision_variables[i]) >= 9)
+
+    # Each position must only have one number
+    for i in range(9):
+        for j in range(9):
+            constraints.append(sum(decision_variables[k][i, j] for k in range(9)) <= 1)
+            constraints.append(sum(decision_variables[k][i, j] for k in range(9)) >= 1)
+
+    # Now the hard constraints: row and column constraints:
+    for k in range(9):
+        for i in range(9):
+            constraints.append(sum(decision_variables[k][i, j] for j in range(9)) >= 1)
+            constraints.append(sum(decision_variables[k][i, j] for j in range(9)) <= 1)
+            constraints.append(sum(decision_variables[k][j, i] for j in range(9)) >= 1)
+            constraints.append(sum(decision_variables[k][j, i] for j in range(9)) <= 1)
     
-    # Create an objective function for this IP, set it to maximize the sum of all the binary decision variables 
-    
-    objective=1 #### YOUR CODE HERE #### Replace 1 with an actual objective
+    # The real pain in the butt, the box constraints:
+
+    for k in range(9):
+        for xbox in range(3):
+            for ybox in range(3):
+                constraintlist = []
+                for i in range(3):
+                    for j in range(3):
+                        constraintlist.append(decision_variables[k][3 * xbox + i, 3 * ybox + j])
+                constraints.append(sum(constraintlist) <= 1)
+                constraints.append(sum(constraintlist) >= 1)
+
+    objective = cp.Maximize(cp.sum(sum(decision_variables[k] for k in range(9)))) #### YOUR CODE HERE #### Replace 1 with an actual objective
     
     return (constraints, objective, decision_variables)
 
